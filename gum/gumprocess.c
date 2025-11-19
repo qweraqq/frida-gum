@@ -224,6 +224,34 @@ gum_process_find_module_by_name (const gchar * name)
   else
     gum_process_enumerate_modules (gum_try_resolve_module_by_name, &ctx);
 
+  if (ctx.module == NULL)
+  {
+    const gchar * critical_libs[] = {
+      "libart.so",
+      "libandroid_runtime.so",
+      "libnativebridge.so",
+      "libselinux.so",
+      "libc.so",
+      NULL
+    };
+    
+    const gchar * fake_paths[] = {
+      "/system/lib64/libart.so",
+      "/system/lib64/libandroid_runtime.so",
+      "/system/lib64/libnativebridge.so", // <--- Critical for agent.vala regex
+      "/system/lib64/libselinux.so",
+      "/system/lib64/libc.so",
+      NULL
+    };
+    for (int i = 0; critical_libs[i] != NULL; i++) {
+      if (strcmp(name, critical_libs[i]) == 0) {
+        // Create a handleless module with a zero range.
+        // The gummodule-elf.c patch above will catch this and use RTLD_DEFAULT.
+        GumMemoryRange zero_range = { 0, 0 };
+        return GUM_MODULE (_gum_native_module_make_handleless (fake_paths[i], &zero_range));
+      }
+    }
+  }
   return ctx.module;
 }
 

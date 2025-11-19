@@ -1151,8 +1151,26 @@ gum_process_get_libc_module (void)
 static GumModule *
 gum_try_init_libc_module (void)
 {
+  const Dl_info * info = _gum_process_get_libc_info ();
+  
+  if (info == NULL)
+    return NULL;
   gum_libc_module = gum_process_find_module_by_address (
-      GUM_ADDRESS (_gum_process_get_libc_info ()->dli_fbase));
+      GUM_ADDRESS (info->dli_fbase));
+
+  // [PATCH START] 
+  // If libc is hidden from the linker list, find_module_by_address returns NULL.
+  // We must create a "Phantom" libc module so exit-monitor doesn't crash.
+  if (gum_libc_module == NULL && info->dli_fname != NULL)
+  {
+    GumMemoryRange range;
+    range.base_address = GUM_ADDRESS (info->dli_fbase);
+    range.size = 0; // Unknown size, but sufficient for handleless creation
+    
+    gum_libc_module = GUM_MODULE (_gum_native_module_make_handleless (
+        info->dli_fname, &range));
+  }
+  // [PATCH END]
 
   _gum_register_destructor (gum_deinit_libc_module);
 

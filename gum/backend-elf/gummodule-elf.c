@@ -216,9 +216,14 @@ _gum_native_module_get_elf_module (GumNativeModule * self)
   if (!self->attempted_elf_module_creation)
   {
     self->attempted_elf_module_creation = TRUE;
-
-    self->cached_elf_module = gum_elf_module_new_from_memory (self->path,
-        self->range.base_address, NULL);
+  // [PATCH START]
+    // CRITICAL: If this is a Phantom Module (base=0), DO NOT parse ELF.
+    // Reading address 0 will crash the process immediately.
+    if (self->range.base_address == 0) {
+      self->cached_elf_module = NULL;
+    } else {
+      self->cached_elf_module = gum_elf_module_new_from_memory (self->path, self->range.base_address, NULL);
+    }
   }
 
   GUM_NATIVE_MODULE_UNLOCK (self);
@@ -493,8 +498,7 @@ gum_native_module_find_export_by_name (GumModule * module,
 
   handle = _gum_native_module_get_handle (self);
   if (handle == NULL)
-    return 0;
-
+    return gum_dlsym (RTLD_DEFAULT, symbol_name);
   return gum_dlsym (handle, symbol_name);
 }
 

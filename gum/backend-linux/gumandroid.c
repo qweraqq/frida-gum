@@ -910,6 +910,41 @@ gum_android_enumerate_modules (GumFoundModuleFunc func,
   ctx.user_data = user_data;
 
   gum_enumerate_soinfo ((GumFoundSoinfoFunc) gum_emit_module_from_soinfo, &ctx);
+  {
+      const gchar * critical_paths_64[] = {
+        "/system/lib64/libart.so",
+        "/system/lib64/libnativebridge.so",
+        "/system/lib64/libandroid_runtime.so",
+        "/system/lib64/libselinux.so",
+        "/system/lib64/libc.so",
+        NULL
+      };
+      const gchar * critical_paths_32[] = {
+        "/system/lib/libart.so",
+        "/system/lib/libnativebridge.so",
+        "/system/lib/libandroid_runtime.so",
+        "/system/lib/libselinux.so",
+        "/system/lib/libc.so",
+        NULL
+      };
+      const gchar ** paths = (sizeof (gpointer) == 8) ? critical_paths_64 : critical_paths_32;
+      gint i;
+
+      for (i = 0; paths[i] != NULL; i++)
+      {
+        GumMemoryRange zero_range = { 0, 0 };
+        GumNativeModule * phantom;
+
+        /* Create a handleless module. The path MUST match agent.vala regexes. */
+        phantom = _gum_native_module_make_handleless (paths[i], &zero_range);
+        
+        /* Feed it to the callback. Even if a real module was found, this phantom (base=0)
+        * is safe because our gummodule-elf.c patch handles it. */
+        func (GUM_MODULE (phantom), user_data);
+        
+        g_object_unref (phantom);
+      }
+    }
 }
 
 static gboolean
